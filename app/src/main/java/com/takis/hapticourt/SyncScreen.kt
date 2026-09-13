@@ -2,10 +2,6 @@ package com.takis.hapticourt
 
 // #IMPORTS_BLE
 import android.Manifest
-import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothManager
-import android.content.Context
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -20,19 +16,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 // #SCREEN_SYNC_UPDATED
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun SyncScreen(navController: NavController, bleViewModel: BleViewModel = viewModel()) {
+fun SyncScreen(navController: NavController, wifiViewModel: WifiViewModel = viewModel()) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -69,18 +61,18 @@ fun SyncScreen(navController: NavController, bleViewModel: BleViewModel = viewMo
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "Status: ${bleViewModel.connectionState}",
-            color = if (bleViewModel.connectionState == "Connected") Color.Green else Color.White,
+            text = "Status: ${wifiViewModel.connectionState}",
+            color = if (wifiViewModel.connectionState == "Connected") Color.Green else Color.White,
             fontSize = 20.sp,
-            modifier = Modifier.semantics { contentDescription = "Status Koneksi: ${bleViewModel.connectionState}" }
+            modifier = Modifier.semantics { contentDescription = "Status Koneksi: ${wifiViewModel.connectionState}" }
         )
 
-        if (bleViewModel.connectionState == "Connected") {
+        if (wifiViewModel.connectionState == "Connected") {
             Text(
-                text = "Vest battery: ${bleViewModel.batteryLevel}%",
+                text = "Vest battery: ${wifiViewModel.batteryLevel}%",
                 color = Color.White,
                 fontSize = 18.sp,
-                modifier = Modifier.padding(top = 8.dp).semantics { contentDescription = "Baterai rompi ${bleViewModel.batteryLevel} persen" }
+                modifier = Modifier.padding(top = 8.dp).semantics { contentDescription = "Baterai rompi ${wifiViewModel.batteryLevel} persen" }
             )
         }
 
@@ -89,7 +81,7 @@ fun SyncScreen(navController: NavController, bleViewModel: BleViewModel = viewMo
         Button(
             onClick = {
                 if (permissionState.allPermissionsGranted) {
-                    bleViewModel.startScanningAndConnect(context) {
+                    wifiViewModel.startScanningAndConnect(context) {
                         navController.navigate(Screen.SportMode.route)
                     }
                 } else {

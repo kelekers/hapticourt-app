@@ -29,16 +29,20 @@ import java.util.concurrent.Executors
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
-// #SCREEN_LIVE_TRACKING_UPDATE
+// #SCREEN_LIVE_TRACKING
 @Composable
-fun LiveTrackingScreen(navController: NavController, bleViewModel: BleViewModel = viewModel()) {
+fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewModel = viewModel()) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var inferenceResult by remember { mutableStateOf("Initializing AI...") }
+    var inferenceResult by remember { mutableStateOf("Menunggu Frame...") }
 
     val aiProcessor = remember { AiProcessor(context) }
     val executor = remember { Executors.newSingleThreadExecutor() }
+    val coroutineScope = remember { CoroutineScope(Dispatchers.Default) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -70,28 +74,30 @@ fun LiveTrackingScreen(navController: NavController, bleViewModel: BleViewModel 
                             it.setSurfaceProvider(previewView.surfaceProvider)
                         }
 
+                        // #CAMERA_RESOLUTION_SETUP
                         val resolutionSelector = ResolutionSelector.Builder()
-                            .setResolutionStrategy(ResolutionStrategy(Size(224, 224), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER))
+                            .setResolutionStrategy(ResolutionStrategy(Size(640, 640), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER))
                             .build()
 
                         val imageAnalysis = ImageAnalysis.Builder()
                             .setResolutionSelector(resolutionSelector)
                             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                             .build()
 
+                        // #FRAME_ANALYZER
                         imageAnalysis.setAnalyzer(executor) { imageProxy ->
-                            val bitmap = android.graphics.Bitmap.createBitmap(
-                                imageProxy.width,
-                                imageProxy.height,
-                                android.graphics.Bitmap.Config.ARGB_8888
-                            )
-                            val result = aiProcessor.analyzeFrame(bitmap)
-                            inferenceResult = result
+                            val bitmap = imageProxy.toBitmap()
 
-                            val hapticCommand = HapticMapper.mapAiToHaptic(result)
-                            bleViewModel.sendHapticCommand(hapticCommand)
+                            coroutineScope.launch {
+                                val result = aiProcessor.analyzeFrame(bitmap)
+                                inferenceResult = result
 
-                            imageProxy.close()
+                                val hapticCommand = HapticMapper.mapAiToHaptic(result)
+                                wifiViewModel.sendHapticCommand(hapticCommand)
+
+                                imageProxy.close()
+                            }
                         }
 
                         val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA

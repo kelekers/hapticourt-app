@@ -52,21 +52,27 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
+    // #DEPENDENCIES_LIFECYCLE & COMPOSE
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
-
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
     // #DEPENDENCIES_BLE
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
 
-    // #DEPENDENCIES_CAMERAX
-    implementation("androidx.camera:camera-core:1.3.1")
-    implementation("androidx.camera:camera-camera2:1.3.1")
-    implementation("androidx.camera:camera-lifecycle:1.3.1")
-    implementation("androidx.camera:camera-view:1.3.1")
+    // #DEPENDENCIES_CAMERAX (Menggunakan variabel agar seragam)
+    val cameraxVersion = "1.3.1"
+    implementation("androidx.camera:camera-core:$cameraxVersion")
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
 
-    // #DEPENDENCIES_TFLITE
-    implementation("org.tensorflow:tensorflow-lite:2.13.0")
-    implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    // #DEPENDENCIES_TFLITE (Diseragamkan ke versi 2.14.0)
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.14.0")
+
+    // #DEPENDENCIES_COROUTINES (Untuk Multithreading)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
