@@ -73,6 +73,9 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-gpu-api:2.16.1")
 
+    // #DEPENDENCIES_OPENCV (Homography Transformation)
+    implementation("org.opencv:opencv:4.9.0")
+
     // #DEPENDENCIES_COROUTINES (Untuk Multithreading)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }

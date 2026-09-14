@@ -38,6 +38,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.opencv.core.Core
+import org.opencv.core.MatOfPoint2f
+import org.opencv.core.Point
 
 // #SCREEN_LIVE_TRACKING
 @Composable
@@ -45,10 +48,19 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var inferenceResult by remember { mutableStateOf("Menunggu Frame...") }
+    var fps by remember { mutableStateOf(0) }
+    
+    // Variabel untuk menyimpan titik 2D setelah Homography (Mini-map)
+    var minimapPlayerPos by remember { mutableStateOf(Offset(-1f, -1f)) }
+    var minimapBallPos by remember { mutableStateOf(Offset(-1f, -1f)) }
 
     val aiProcessor = remember { AiProcessor(context) }
     val executor = remember { Executors.newSingleThreadExecutor() }
     val coroutineScope = remember { CoroutineScope(Dispatchers.Default) }
+    
+    // Variabel untuk menghitung FPS
+    var frameCount by remember { mutableStateOf(0) }
+    var lastFpsTime by remember { mutableStateOf(System.currentTimeMillis()) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -108,15 +120,49 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
                                 try {
                                     val result = aiProcessor.analyzeFrame(rotatedBitmap)
                                     
-                                    // Update UI dan kirim data HANYA jika frame tidak di-skip
                                     if (result != "SKIP") {
                                         inferenceResult = result
+                                        
+                                        // Update FPS
+                                        frameCount++
+                                        val currentTime = System.currentTimeMillis()
+                                        if (currentTime - lastFpsTime >= 1000) {
+                                            fps = frameCount
+                                            frameCount = 0
+                                            lastFpsTime = currentTime
+                                        }
+
+                                        // Parsing & Hitung Transformasi Homography
+                                        val parts = result.split("|")
+                                        val pPart = parts.find { it.startsWith("P:") }?.substringAfter("P:")
+                                        val bPart = parts.find { it.startsWith("B:") }?.substringAfter("B:")
+
+                                        var transformedPlayer = Offset(-1f, -1f)
+                                        var transformedBall = Offset(-1f, -1f)
+
+                                        if (pPart != null && pPart != "N,N") {
+                                            val coords = pPart.split(",")
+                                            if (coords.size == 2) {
+                                                transformedPlayer = applyHomography(coords[0].toDouble(), coords[1].toDouble())
+                                            }
+                                        }
+                                        if (bPart != null && bPart != "N,N") {
+                                            val coords = bPart.split(",")
+                                            if (coords.size == 2) {
+                                                transformedBall = applyHomography(coords[0].toDouble(), coords[1].toDouble())
+                                            }
+                                        }
+
+                                        // Update state Mini-map (di UI thread)
+                                        minimapPlayerPos = transformedPlayer
+                                        minimapBallPos = transformedBall
+
+                                        // NOTE: Kirim koordinat TRANSFORMASI ke HapticMapper (Bukan koordinat kamera)
+                                        // Tapi untuk tes UI, kita gunakan string lama dulu
                                         val hapticCommand = HapticMapper.mapAiToHaptic(result)
                                         wifiViewModel.sendHapticCommand(hapticCommand)
                                     }
                                 } finally {
-                                    // Tutup frame proxy setelah AI BENAR-BENAR SELESAI bekerja
-                                    // Dengan begini CameraX baru akan mengirim frame selanjutnya
                                     imageProxy.close()
                                 }
                             }
@@ -195,6 +241,63 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
                 }
             }
 
+            // AREA MINI-MAP & INDIKATOR FPS
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                // FPS Counter
+                Text(
+                    text = "FPS: $fps",
+                    color = Color.Yellow,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.background(Color.Black.copy(alpha = 0.5f)).padding(8.dp)
+                )
+                
+                // Peta Mini (Court Minimap)
+                Box(
+                    modifier = Modifier
+                        .size(120.dp, 240.dp) // Rasio 1:2 (misal untuk merepresentasikan 600x1200)
+                        .background(Color(0xFF2E7D32)) // Warna Hijau Lapangan
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        // Gambar garis tengah lapangan
+                        drawLine(
+                            color = Color.White,
+                            start = Offset(0f, size.height / 2),
+                            end = Offset(size.width, size.height / 2),
+                            strokeWidth = 2f
+                        )
+                        
+                        // Gambar Pemain (Merah)
+                        if (minimapPlayerPos.x >= 0f) {
+                            val mapX = (minimapPlayerPos.x / 600f) * size.width
+                            val mapY = (minimapPlayerPos.y / 1200f) * size.height
+                            
+                            val clampX = mapX.coerceIn(0f, size.width)
+                            val clampY = mapY.coerceIn(0f, size.height)
+                            
+                            drawCircle(color = Color.Red, radius = 10f, center = Offset(clampX, clampY))
+                        }
+                        
+                        // Gambar Bola (Biru)
+                        if (minimapBallPos.x >= 0f) {
+                            val mapX = (minimapBallPos.x / 600f) * size.width
+                            val mapY = (minimapBallPos.y / 1200f) * size.height
+                            
+                            val clampX = mapX.coerceIn(0f, size.width)
+                            val clampY = mapY.coerceIn(0f, size.height)
+                            
+                            drawCircle(color = Color.Blue, radius = 6f, center = Offset(clampX, clampY))
+                        }
+                    }
+                }
+            }
+
             Text(
                 text = "LIVE TRACKING",
                 color = Color.White,
@@ -231,4 +334,28 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
             Text("Stop Tracking", color = Color.White, fontSize = 24.sp)
         }
     }
+}
+
+// FUNGSI UNTUK MENERJEMAHKAN 1 TITIK (Point) MENGGUNAKAN MATRIKS KALIBRASI
+fun applyHomography(x: Double, y: Double): Offset {
+    val matrix = CourtHomographyManager.perspectiveMatrix
+    if (matrix == null || matrix.empty()) {
+        // Jika belum kalibrasi, kembalikan nilai asal (tidak ditransformasi)
+        return Offset(x.toFloat(), y.toFloat())
+    }
+
+    // OpenCV butuh input array (MatOfPoint2f) meski hanya 1 titik
+    val srcPoint = MatOfPoint2f(Point(x, y))
+    val dstPoint = MatOfPoint2f()
+
+    Core.perspectiveTransform(srcPoint, dstPoint, matrix)
+
+    val transformedArr = dstPoint.toArray()
+    if (transformedArr.isNotEmpty()) {
+        val newX = transformedArr[0].x.toFloat()
+        val newY = transformedArr[0].y.toFloat()
+        return Offset(newX, newY)
+    }
+
+    return Offset(x.toFloat(), y.toFloat())
 }

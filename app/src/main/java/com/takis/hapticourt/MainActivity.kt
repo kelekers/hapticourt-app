@@ -2,6 +2,7 @@ package com.takis.hapticourt
 
 // #IMPORTS
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -12,11 +13,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import org.opencv.android.OpenCVLoader
 
 // #MAIN_ACTIVITY
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        if (OpenCVLoader.initLocal()) {
+            Log.d("MainActivity", "OpenCV loaded successfully")
+        } else {
+            Log.e("MainActivity", "OpenCV initialization failed")
+        }
+        
         setContent {
             HaptiCourtApp()
         }
