@@ -105,6 +105,34 @@ class AiProcessor(context: Context) {
         }
     }
 
+    // Fungsi untuk mengubah Index YOLO menjadi koordinat Layar (X,Y)
+    private fun getCoordinatesFromIndex(index: Int): Pair<Int, Int> {
+        // YOLO 416x416 memiliki 3 tingkatan Grid (Feature Maps):
+        // 1. Grid 52x52 (2704 kotak) untuk objek KECIL -> Index 0 s/d 2703
+        // 2. Grid 26x26 (676 kotak) untuk objek SEDANG -> Index 2704 s/d 3379
+        // 3. Grid 13x13 (169 kotak) untuk objek BESAR -> Index 3380 s/d 3548
+        
+        return when {
+            index < 2704 -> { // Grid 52x52 (Ukuran per sel: 416/52 = 8 pixel)
+                val gridX = index % 52
+                val gridY = index / 52
+                Pair(gridX * 8 + 4, gridY * 8 + 4) // +4 untuk titik tengah sel
+            }
+            index < 3380 -> { // Grid 26x26 (Ukuran per sel: 416/26 = 16 pixel)
+                val relIndex = index - 2704
+                val gridX = relIndex % 26
+                val gridY = relIndex / 26
+                Pair(gridX * 16 + 8, gridY * 16 + 8) // +8 untuk titik tengah
+            }
+            else -> { // Grid 13x13 (Ukuran per sel: 416/13 = 32 pixel)
+                val relIndex = index - 3380
+                val gridX = relIndex % 13
+                val gridY = relIndex / 13
+                Pair(gridX * 32 + 16, gridY * 32 + 16) // +16 untuk titik tengah
+            }
+        }
+    }
+
     private fun runYoloInference(bitmap: Bitmap): String {
         // Skala gambar input menjadi 416x416
         val resizedBitmap = Bitmap.createScaledBitmap(bitmap, 416, 416, true)
@@ -179,23 +207,24 @@ class AiProcessor(context: Context) {
         // Thresholding diturunkan karena Model INT8 Nano memiliki akurasi yang lebih rendah
         // 0.25f (25%) sudah cukup baik untuk mendeteksi manusia di model ringan
         val playerResult = if (bestPlayerConf > 0.25f && bestPlayerIdx != -1) {
-            val cx = outputBuffer[0][0][bestPlayerIdx] // Titik tengah X
-            val cy = outputBuffer[0][1][bestPlayerIdx] // Titik tengah Y
-            "${cx.toInt()},${cy.toInt()}"
+            val (cx, cy) = getCoordinatesFromIndex(bestPlayerIdx)
+            "${cx},${cy}"
         } else {
             "N,N"
         }
 
         // 0.15f (15%) untuk bola karena objeknya sangat kecil dan sering blur
         val ballResult = if (bestBallConf > 0.15f && bestBallIdx != -1) {
-            val cx = outputBuffer[0][0][bestBallIdx] // Titik tengah X
-            val cy = outputBuffer[0][1][bestBallIdx] // Titik tengah Y
-            "${cx.toInt()},${cy.toInt()}"
+            val (cx, cy) = getCoordinatesFromIndex(bestBallIdx)
+            "${cx},${cy}"
         } else {
             "N,N"
         }
 
-        return "B:$ballResult|P:$playerResult"
+        val finalString = "B:$ballResult|P:$playerResult"
+        Log.d(TAG, "MENGIRIM KE LAYAR -> $finalString")
+        
+        return finalString
     }
 
     fun close() {

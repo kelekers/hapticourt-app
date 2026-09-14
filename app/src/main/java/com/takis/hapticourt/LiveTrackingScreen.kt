@@ -2,6 +2,9 @@
 package com.takis.hapticourt
 
 // #IMPORTS
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.util.Log
 import android.util.Size
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -23,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -89,14 +93,20 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
 
                         // #FRAME_ANALYZER
                         imageAnalysis.setAnalyzer(executor) { imageProxy ->
-                            val bitmap = imageProxy.toBitmap()
+                            // 1. Dapatkan rotasi aktual dari kamera (biasanya 90 derajat di Portrait)
+                            val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+                            val rawBitmap = imageProxy.toBitmap()
 
-                            // Jangan panggil imageProxy.close() di sini!
-                            // Pindahkan ke dalam coroutine (blok finally)
+                            // 2. Putar Bitmap agar objek (manusia) berdiri tegak
+                            val matrix = Matrix()
+                            matrix.postRotate(rotationDegrees.toFloat())
+                            val rotatedBitmap = Bitmap.createBitmap(
+                                rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true
+                            )
 
                             coroutineScope.launch {
                                 try {
-                                    val result = aiProcessor.analyzeFrame(bitmap)
+                                    val result = aiProcessor.analyzeFrame(rotatedBitmap)
                                     
                                     // Update UI dan kirim data HANYA jika frame tidak di-skip
                                     if (result != "SKIP") {
@@ -133,8 +143,8 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
             )
 
             // #UI_OVERLAY_CANVAS
-            // Menambahkan canvas untuk menggambar titik AI
-            Canvas(modifier = Modifier.fillMaxSize()) {
+            // Menambahkan canvas untuk menggambar titik AI, pastikan Z-Index di atas kamera
+            Canvas(modifier = Modifier.fillMaxSize().zIndex(10f)) {
                 val canvasW = size.width
                 val canvasH = size.height
 
@@ -148,10 +158,15 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
                             // Resolusi sekarang mengikuti YOLO (416x416)
                             val rx = coords[0].toFloat() / 416f
                             val ry = coords[1].toFloat() / 416f
+                            
+                            // Gunakan titik pusat layar jika resolusi berantakan (clamp)
+                            val finalX = (rx * canvasW).coerceIn(0f, canvasW)
+                            val finalY = (ry * canvasH).coerceIn(0f, canvasH)
+                            
                             drawCircle(
                                 color = Color.Blue,
                                 radius = 25f,
-                                center = Offset(rx * canvasW, ry * canvasH)
+                                center = Offset(finalX, finalY)
                             )
                         }
                     }
@@ -164,15 +179,19 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
                             // Resolusi input YOLO adalah 416x416
                             val rx = coords[0].toFloat() / 416f
                             val ry = coords[1].toFloat() / 416f
+                            
+                            val finalX = (rx * canvasW).coerceIn(0f, canvasW)
+                            val finalY = (ry * canvasH).coerceIn(0f, canvasH)
+                            
                             drawCircle(
                                 color = Color.Red,
                                 radius = 35f,
-                                center = Offset(rx * canvasW, ry * canvasH)
+                                center = Offset(finalX, finalY)
                             )
                         }
                     }
                 } catch (e: Exception) {
-                    // Abaikan jika string belum berformat koordinat
+                    Log.e("HaptiCourt-UI", "Error saat parsing koordinat di Canvas: ${e.message}")
                 }
             }
 
