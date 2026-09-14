@@ -8,6 +8,7 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -28,6 +29,7 @@ import androidx.navigation.NavController
 import java.util.concurrent.Executors
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
+import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -89,14 +91,24 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
                         imageAnalysis.setAnalyzer(executor) { imageProxy ->
                             val bitmap = imageProxy.toBitmap()
 
+                            // Jangan panggil imageProxy.close() di sini!
+                            // Pindahkan ke dalam coroutine (blok finally)
+
                             coroutineScope.launch {
-                                val result = aiProcessor.analyzeFrame(bitmap)
-                                inferenceResult = result
-
-                                val hapticCommand = HapticMapper.mapAiToHaptic(result)
-                                wifiViewModel.sendHapticCommand(hapticCommand)
-
-                                imageProxy.close()
+                                try {
+                                    val result = aiProcessor.analyzeFrame(bitmap)
+                                    
+                                    // Update UI dan kirim data HANYA jika frame tidak di-skip
+                                    if (result != "SKIP") {
+                                        inferenceResult = result
+                                        val hapticCommand = HapticMapper.mapAiToHaptic(result)
+                                        wifiViewModel.sendHapticCommand(hapticCommand)
+                                    }
+                                } finally {
+                                    // Tutup frame proxy setelah AI BENAR-BENAR SELESAI bekerja
+                                    // Dengan begini CameraX baru akan mengirim frame selanjutnya
+                                    imageProxy.close()
+                                }
                             }
                         }
 
@@ -119,6 +131,50 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
                 },
                 modifier = Modifier.fillMaxSize()
             )
+
+            // #UI_OVERLAY_CANVAS
+            // Menambahkan canvas untuk menggambar titik AI
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val canvasW = size.width
+                val canvasH = size.height
+
+                try {
+                    val parts = inferenceResult.split("|")
+                    // Menggambar Bola (Warna Biru)
+                    val ballPart = parts.find { it.startsWith("B:") }?.substringAfter("B:")
+                    if (ballPart != null && ballPart != "N,N") {
+                        val coords = ballPart.split(",")
+                        if (coords.size == 2) {
+                            // Resolusi sekarang mengikuti YOLO (416x416)
+                            val rx = coords[0].toFloat() / 416f
+                            val ry = coords[1].toFloat() / 416f
+                            drawCircle(
+                                color = Color.Blue,
+                                radius = 25f,
+                                center = Offset(rx * canvasW, ry * canvasH)
+                            )
+                        }
+                    }
+
+                    // Menggambar Pemain (Warna Merah)
+                    val playerPart = parts.find { it.startsWith("P:") }?.substringAfter("P:")
+                    if (playerPart != null && playerPart != "N,N") {
+                        val coords = playerPart.split(",")
+                        if (coords.size == 2) {
+                            // Resolusi input YOLO adalah 416x416
+                            val rx = coords[0].toFloat() / 416f
+                            val ry = coords[1].toFloat() / 416f
+                            drawCircle(
+                                color = Color.Red,
+                                radius = 35f,
+                                center = Offset(rx * canvasW, ry * canvasH)
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Abaikan jika string belum berformat koordinat
+                }
+            }
 
             Text(
                 text = "LIVE TRACKING",

@@ -68,10 +68,10 @@ dependencies {
     implementation("androidx.camera:camera-view:$cameraxVersion")
 
     // #DEPENDENCIES_TFLITE (Diseragamkan ke versi 2.14.0)
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
-    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-api:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.16.1")
 
     // #DEPENDENCIES_COROUTINES (Untuk Multithreading)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

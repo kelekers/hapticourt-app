@@ -37,29 +37,49 @@ class CalibrationViewModel : ViewModel(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     var isTtsReady by mutableStateOf(false)
         private set
+        
+    private var lastSpokenText: String = ""
+    private var lastSpokenTime: Long = 0
 
     fun initTts(context: Context) {
         if (tts == null) {
-            tts = TextToSpeech(context, this)
+            // SANGAT PENTING: Gunakan applicationContext agar tidak terjadi Memory Leak 
+            // saat Activity/Screen di rotasi atau ditutup
+            tts = TextToSpeech(context.applicationContext, this)
         }
     }
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.language = java.util.Locale.forLanguageTag("id-ID")
+            val result = tts?.setLanguage(Locale("id", "ID"))
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                // Fallback ke bahasa Inggris jika HP tidak ada bahasa Indonesia
+                tts?.setLanguage(Locale.US)
+            }
             isTtsReady = true
         }
     }
 
     fun speakInstruction(text: String) {
-        if (isTtsReady) {
-            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+        if (!isTtsReady) return
+        
+        // Anti-Spam: Jangan ucapkan kalimat yang sama berulang-ulang tanpa jeda
+        // dan beri jeda minimal 2 detik (2000ms) antar ucapan agar tidak ngelag
+        val currentTime = System.currentTimeMillis()
+        if (text == lastSpokenText && (currentTime - lastSpokenTime) < 2000) {
+            return
         }
+
+        // Gunakan QUEUE_ADD agar kalimat mengantre secara natural, bukan FLUSH yang memutus kalimat secara kasar
+        tts?.speak(text, TextToSpeech.QUEUE_ADD, null, null)
+        lastSpokenText = text
+        lastSpokenTime = currentTime
     }
 
     override fun onCleared() {
         tts?.stop()
         tts?.shutdown()
+        tts = null // Bebaskan referensi
         super.onCleared()
     }
 }
