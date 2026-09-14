@@ -50,9 +50,9 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
     var inferenceResult by remember { mutableStateOf("Menunggu Frame...") }
     var fps by remember { mutableStateOf(0) }
     
-    // Variabel untuk menyimpan titik 2D setelah Homography (Mini-map)
-    var minimapPlayerPos by remember { mutableStateOf(Offset(-1f, -1f)) }
-    var minimapBallPos by remember { mutableStateOf(Offset(-1f, -1f)) }
+    // Variabel untuk menyimpan titik 2D setelah Homography (Mini-map) sekarang berbasis List
+    var minimapPlayers by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    var minimapBalls by remember { mutableStateOf<List<Offset>>(emptyList()) }
 
     val aiProcessor = remember { AiProcessor(context) }
     val executor = remember { Executors.newSingleThreadExecutor() }
@@ -132,30 +132,37 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
                                             lastFpsTime = currentTime
                                         }
 
-                                        // Parsing & Hitung Transformasi Homography
+                                        // Parsing & Hitung Transformasi Homography (Sekarang List)
                                         val parts = result.split("|")
                                         val pPart = parts.find { it.startsWith("P:") }?.substringAfter("P:")
                                         val bPart = parts.find { it.startsWith("B:") }?.substringAfter("B:")
 
-                                        var transformedPlayer = Offset(-1f, -1f)
-                                        var transformedBall = Offset(-1f, -1f)
+                                        val transformedPlayers = mutableListOf<Offset>()
+                                        val transformedBalls = mutableListOf<Offset>()
 
                                         if (pPart != null && pPart != "N,N") {
-                                            val coords = pPart.split(",")
-                                            if (coords.size == 2) {
-                                                transformedPlayer = applyHomography(coords[0].toDouble(), coords[1].toDouble())
+                                            val coordsList = pPart.split(";")
+                                            for (coord in coordsList) {
+                                                val xy = coord.split(",")
+                                                if (xy.size == 2) {
+                                                    transformedPlayers.add(applyHomography(xy[0].toDouble(), xy[1].toDouble()))
+                                                }
                                             }
                                         }
+                                        
                                         if (bPart != null && bPart != "N,N") {
-                                            val coords = bPart.split(",")
-                                            if (coords.size == 2) {
-                                                transformedBall = applyHomography(coords[0].toDouble(), coords[1].toDouble())
+                                            val coordsList = bPart.split(";")
+                                            for (coord in coordsList) {
+                                                val xy = coord.split(",")
+                                                if (xy.size == 2) {
+                                                    transformedBalls.add(applyHomography(xy[0].toDouble(), xy[1].toDouble()))
+                                                }
                                             }
                                         }
 
                                         // Update state Mini-map (di UI thread)
-                                        minimapPlayerPos = transformedPlayer
-                                        minimapBallPos = transformedBall
+                                        minimapPlayers = transformedPlayers
+                                        minimapBalls = transformedBalls
 
                                         // NOTE: Kirim koordinat TRANSFORMASI ke HapticMapper (Bukan koordinat kamera)
                                         // Tapi untuk tes UI, kita gunakan string lama dulu
@@ -273,26 +280,30 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
                             strokeWidth = 2f
                         )
                         
-                        // Gambar Pemain (Merah)
-                        if (minimapPlayerPos.x >= 0f) {
-                            val mapX = (minimapPlayerPos.x / 600f) * size.width
-                            val mapY = (minimapPlayerPos.y / 1200f) * size.height
-                            
-                            val clampX = mapX.coerceIn(0f, size.width)
-                            val clampY = mapY.coerceIn(0f, size.height)
-                            
-                            drawCircle(color = Color.Red, radius = 10f, center = Offset(clampX, clampY))
+                        // Gambar Pemain (Merah) - Bisa Banyak
+                        for (pos in minimapPlayers) {
+                            if (pos.x >= 0f) {
+                                val mapX = (pos.x / 600f) * size.width
+                                val mapY = (pos.y / 1200f) * size.height
+                                
+                                val clampX = mapX.coerceIn(0f, size.width)
+                                val clampY = mapY.coerceIn(0f, size.height)
+                                
+                                drawCircle(color = Color.Red, radius = 10f, center = Offset(clampX, clampY))
+                            }
                         }
                         
-                        // Gambar Bola (Biru)
-                        if (minimapBallPos.x >= 0f) {
-                            val mapX = (minimapBallPos.x / 600f) * size.width
-                            val mapY = (minimapBallPos.y / 1200f) * size.height
-                            
-                            val clampX = mapX.coerceIn(0f, size.width)
-                            val clampY = mapY.coerceIn(0f, size.height)
-                            
-                            drawCircle(color = Color.Blue, radius = 6f, center = Offset(clampX, clampY))
+                        // Gambar Bola (Biru) - Bisa Banyak
+                        for (pos in minimapBalls) {
+                            if (pos.x >= 0f) {
+                                val mapX = (pos.x / 600f) * size.width
+                                val mapY = (pos.y / 1200f) * size.height
+                                
+                                val clampX = mapX.coerceIn(0f, size.width)
+                                val clampY = mapY.coerceIn(0f, size.height)
+                                
+                                drawCircle(color = Color.Blue, radius = 6f, center = Offset(clampX, clampY))
+                            }
                         }
                     }
                 }

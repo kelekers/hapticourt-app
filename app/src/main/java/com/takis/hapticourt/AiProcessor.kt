@@ -176,55 +176,46 @@ class AiProcessor(context: Context) {
         val outputBuffer = Array(1) { Array(84) { FloatArray(3549) } }
         yoloInterpreter?.run(yoloInputBuffer, outputBuffer)
 
-        var bestPlayerConf = 0f
-        var bestPlayerIdx = -1
+        // List untuk menampung semua objek yang terdeteksi
+        val playerList = mutableListOf<Pair<Int, Int>>()
+        val ballList = mutableListOf<Pair<Int, Int>>()
 
-        var bestBallConf = 0f
-        var bestBallIdx = -1
-
-        // Loop untuk mengecek semua prediksi
+        // Karena YOLO menghasilkan BANYAK BBox bertumpuk untuk 1 objek (karena tanpa NMS),
+        // kita akan menyimpan skor tertinggi (sebagai Argmax lokal)
+        var maxPlayerConf = 0f
+        var maxBallConf = 0f
+        
         for (i in 0 until 3549) {
-            // Class 0: Person (index = 4 + 0 = 4)
-            // Model YOLO versi Float32 umumnya SUDAH MENGAPLIKASIKAN SIGMOID jika tidak pakai NMS
-            // Jadi kita ambil nilai aslinya saja dulu
             val playerConf = outputBuffer[0][4][i]
-            if (playerConf > bestPlayerConf) {
-                bestPlayerConf = playerConf
-                bestPlayerIdx = i
+            if (playerConf > maxPlayerConf) maxPlayerConf = playerConf
+            if (playerConf > 0.35f) { // Threshold pemain sedikit dinaikkan agar background tidak ikut
+                playerList.add(getCoordinatesFromIndex(i))
             }
 
-            // Class 32: Sports Ball (index = 4 + 32 = 36)
             val ballConf = outputBuffer[0][36][i]
-            if (ballConf > bestBallConf) {
-                bestBallConf = ballConf
-                bestBallIdx = i
+            if (ballConf > maxBallConf) maxBallConf = ballConf
+            if (ballConf > 0.15f) {
+                ballList.add(getCoordinatesFromIndex(i))
             }
         }
 
         // TAMPILKAN LOG HASIL MENTAH DARI TFLITE
-        Log.d(TAG, "RAW SCORE -> Pemain: $bestPlayerConf (Idx: $bestPlayerIdx) | Bola: $bestBallConf (Idx: $bestBallIdx)")
+        // Log.d(TAG, "RAW SCORE -> Pemain: $maxPlayerConf | Bola: $maxBallConf")
 
-        // Thresholding diturunkan karena Model INT8 Nano memiliki akurasi yang lebih rendah
-        // 0.25f (25%) sudah cukup baik untuk mendeteksi manusia di model ringan
-        val playerResult = if (bestPlayerConf > 0.25f && bestPlayerIdx != -1) {
-            val (cx, cy) = getCoordinatesFromIndex(bestPlayerIdx)
-            "${cx},${cy}"
+        // Memformat List menjadi String (P:x,y;x,y|B:x,y)
+        val playerStr = if (playerList.isNotEmpty()) {
+            playerList.joinToString(";") { "${it.first},${it.second}" }
         } else {
             "N,N"
         }
 
-        // 0.15f (15%) untuk bola karena objeknya sangat kecil dan sering blur
-        val ballResult = if (bestBallConf > 0.15f && bestBallIdx != -1) {
-            val (cx, cy) = getCoordinatesFromIndex(bestBallIdx)
-            "${cx},${cy}"
+        val ballStr = if (ballList.isNotEmpty()) {
+            ballList.joinToString(";") { "${it.first},${it.second}" }
         } else {
             "N,N"
         }
 
-        val finalString = "B:$ballResult|P:$playerResult"
-        Log.d(TAG, "MENGIRIM KE LAYAR -> $finalString")
-        
-        return finalString
+        return "B:$ballStr|P:$playerStr"
     }
 
     fun close() {

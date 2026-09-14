@@ -131,8 +131,25 @@ class CourtDetector(private val context: Context) {
                 Log.d(TAG, "Titik Sudut $channel ditemukan di (${bestX}, ${bestY}) | maxHeat: $maxVal")
             }
 
+            // --- PENGURUTAN TITIK OPENCV (MENCEGAH MATRIKS MELINTIR) ---
+            // Urutkan titik agar pas dengan dstPoints: TL, TR, BL, BR
+            
+            // 1. Urutkan berdasarkan titik Y (2 teratas, 2 terbawah)
+            val sortedByY = srcPts.sortedBy { it.y }
+            
+            val topPoints = sortedByY.take(2).sortedBy { it.x } // Top Left, Top Right
+            val bottomPoints = sortedByY.takeLast(2).sortedBy { it.x } // Bottom Left, Bottom Right
+            
+            val topLeft = topPoints[0]
+            val topRight = topPoints[1]
+            val bottomLeft = bottomPoints[0]
+            val bottomRight = bottomPoints[1]
+
+            val orderedSrcPts = listOf(topLeft, topRight, bottomLeft, bottomRight)
+            Log.d(TAG, "Titik Urut: TL=$topLeft, TR=$topRight, BL=$bottomLeft, BR=$bottomRight")
+
             // --- OPENCV HOMOGRAPHY ---
-            val srcPointsMat = MatOfPoint2f(*srcPts.toTypedArray())
+            val srcPointsMat = MatOfPoint2f(*orderedSrcPts.toTypedArray())
             
             // Hitung Matriks Transformasi (Dari perspektif kamera ke peta datar 2D)
             val perspectiveMatrix = Imgproc.getPerspectiveTransform(srcPointsMat, CourtHomographyManager.dstPoints)
