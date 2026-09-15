@@ -41,51 +41,53 @@ fun SportModeScreen(navController: NavController) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 24.dp, top = 64.dp, end = 24.dp)
+                .weight(1f) // Menghabiskan 50% layar atas
+                .padding(start = 32.dp),
+            verticalArrangement = Arrangement.Center
         ) {
             Text(
                 text = "HaptiCourt",
                 fontFamily = SamsungFont,
                 color = Color.Gray,
-                fontSize = 18.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Normal
             )
             Text(
                 text = "Sport Mode",
                 fontFamily = SamsungFont,
                 color = Color.White,
-                fontSize = 42.sp,
+                fontSize = 56.sp,
                 fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
 
         // --- INTERACTION AREA ---
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f), // Menghabiskan 50% layar bawah
             color = Color(0xFF151515),
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+            shape = RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp)
         ) {
-            Column(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxSize()
+                    .padding(32.dp)
             ) {
                 Button(
                     onClick = { 
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        calibrationViewModel.speakInstruction("Tenis dipilih.")
+                        calibrationViewModel.speakInstruction("Mode Tenis dipilih. Mengalihkan ke menu kalibrasi.")
                         navController.navigate(Screen.Calibration.route) 
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
-                    shape = RoundedCornerShape(50),
+                    shape = RoundedCornerShape(32.dp), // Radius yang lebih tegas
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(72.dp)
+                        .fillMaxSize() // Memenuhi seluruh kotak Surface bawah
                         .semantics { role = Role.Button; contentDescription = "Pilih Mode Tenis" }
                 ) {
-                    Text("Tennis", fontFamily = SamsungFont, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("Tennis", fontFamily = SamsungFont, color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

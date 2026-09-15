@@ -321,42 +321,32 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
             }
         }
 
-        // --- INTERACTION AREA (Panel Bawah ala One UI) ---
+        // --- INTERACTION AREA ---
         val haptic = LocalHapticFeedback.current
         Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = Color(0xFF151515), // Dark Theme Panel Samsung
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+            modifier = Modifier.fillMaxWidth().weight(0.8f),
+            color = Color(0xFF151515),
+            shape = RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp),
             shadowElevation = 16.dp
         ) {
-            Column(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // Teks status tak kasat mata untuk TalkBack (opsional) atau teks kecil
-                Text(
-                    text = "Tracking Active",
-                    fontFamily = SamsungFont,
-                    color = Color.Gray,
-                    fontSize = 16.sp,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
                 Button(
                     onClick = { 
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         navController.popBackStack("sync", inclusive = false) 
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3B30)), // Merah terang
-                    shape = RoundedCornerShape(50), // Pill Shape
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3B30)),
+                    shape = RoundedCornerShape(32.dp),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(88.dp) // Ukuran raksasa untuk tunanetra
+                        .fillMaxSize()
                         .semantics { role = Role.Button; contentDescription = "Tombol Berhenti Melacak dan Kembali" }
                 ) {
-                    Text("Stop Tracking", fontFamily = SamsungFont, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Stop", fontFamily = SamsungFont, color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
                 }
             }
         }

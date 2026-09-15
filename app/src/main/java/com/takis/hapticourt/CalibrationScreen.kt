@@ -212,36 +212,21 @@ fun CalibrationScreen(navController: NavController, calibrationViewModel: Calibr
         // --- INTERACTION AREA ---
         val haptic = LocalHapticFeedback.current
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().weight(1f),
             color = Color(0xFF151515),
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+            shape = RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp)
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp),
+                    .fillMaxSize()
+                    .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Teks Status
-                Text(
-                    text = calibrationViewModel.calibrationStatus,
-                    fontFamily = SamsungFont,
-                    color = if (calibrationViewModel.isCalibrationDone) Color(0xFF00E676) else Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 28.sp,
-                    modifier = Modifier
-                        .padding(bottom = 16.dp)
-                        .semantics { contentDescription = "Status: ${calibrationViewModel.calibrationStatus}" }
-                )
-
                 // Tombol Kalibrasi
                 Button(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        calibrationViewModel.updateCalibrationStatus("Menganalisa...", false)
                         calibrationViewModel.speakInstruction("Menganalisa lapangan.")
                         
                         imageCapture?.takePicture(
@@ -264,35 +249,32 @@ fun CalibrationScreen(navController: NavController, calibrationViewModel: Calibr
                                             calibrationViewModel.updateCalibrationStatus("Berhasil!", true)
                                             calibrationViewModel.speakInstruction("Kalibrasi sukses. Tekan Start.")
                                         } else {
-                                            calibrationViewModel.updateCalibrationStatus("Gagal.", false)
                                             calibrationViewModel.speakInstruction("Gagal. Harap ulangi.")
                                         }
                                     }
                                 }
 
                                 override fun onError(exception: ImageCaptureException) {
-                                    calibrationViewModel.updateCalibrationStatus("Gagal Kamera.", false)
+                                    calibrationViewModel.speakInstruction("Gagal Kamera.")
                                 }
                             }
                         )
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A2A2A)),
-                    shape = RoundedCornerShape(50),
+                    shape = RoundedCornerShape(32.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(72.dp)
+                        .weight(1f) // Menghabiskan 50% ruang kotak bawah
                         .semantics { role = Role.Button; contentDescription = "Tombol Kalibrasi Lapangan" }
                 ) {
                     Text(
                         text = "Calibrate", 
                         fontFamily = SamsungFont, 
                         color = Color.White, 
-                        fontSize = 20.sp, 
+                        fontSize = 32.sp, 
                         fontWeight = FontWeight.Bold
                     )
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
 
                 // Tombol Mulai Tracking
                 Button(
@@ -306,13 +288,13 @@ fun CalibrationScreen(navController: NavController, calibrationViewModel: Calibr
                         containerColor = if (calibrationViewModel.isCalibrationDone) Color(0xFF007AFF) else Color(0xFF333333),
                         disabledContainerColor = Color(0xFF333333)
                     ),
-                    shape = RoundedCornerShape(50),
+                    shape = RoundedCornerShape(32.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(72.dp)
+                        .weight(1f) // Menghabiskan 50% ruang kotak bawah
                         .semantics { role = Role.Button; contentDescription = "Tombol Mulai Pelacakan" }
                 ) {
-                    Text("Start", fontFamily = SamsungFont, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Start", fontFamily = SamsungFont, color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
                 }
             }
         }

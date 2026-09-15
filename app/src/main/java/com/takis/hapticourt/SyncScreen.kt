@@ -45,36 +45,39 @@ fun SyncScreen(navController: NavController, wifiViewModel: WifiViewModel = view
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 24.dp, top = 64.dp, end = 24.dp)
+                .weight(1f) // Menghabiskan 50% layar atas
+                .padding(start = 32.dp),
+            verticalArrangement = Arrangement.Center
         ) {
             Text(
                 text = "HaptiCourt",
                 fontFamily = SamsungFont,
                 color = Color.Gray,
-                fontSize = 18.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Normal
             )
             Text(
                 text = "Sync Vest",
                 fontFamily = SamsungFont,
                 color = Color.White,
-                fontSize = 42.sp,
+                fontSize = 56.sp,
                 fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
 
         // --- INTERACTION AREA ---
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f), // Menghabiskan 50% layar bawah
             color = Color(0xFF151515),
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+            shape = RoundedCornerShape(topStart = 48.dp, topEnd = 48.dp)
         ) {
-            Column(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxSize()
+                    .padding(32.dp)
             ) {
                 val isConnected = wifiViewModel.connectionState.contains("Connected")
                 
@@ -95,10 +98,9 @@ fun SyncScreen(navController: NavController, wifiViewModel: WifiViewModel = view
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isConnected) Color(0xFF00E676) else Color(0xFF007AFF)
                     ),
-                    shape = RoundedCornerShape(50),
+                    shape = RoundedCornerShape(32.dp), // Radius yang lebih tegas tapi tetap melengkung
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(72.dp)
+                        .fillMaxSize() // Memenuhi seluruh kotak Surface bawah
                         .semantics { 
                             role = Role.Button
                             contentDescription = if (isConnected) "Rompi Tersambung. Lanjutkan" else "Tombol Hubungkan Rompi"
@@ -108,7 +110,7 @@ fun SyncScreen(navController: NavController, wifiViewModel: WifiViewModel = view
                         text = if (isConnected) "Connected" else "Connect", 
                         fontFamily = SamsungFont, 
                         color = Color.White, 
-                        fontSize = 22.sp, 
+                        fontSize = 40.sp, // Teks raksasa
                         fontWeight = FontWeight.Bold
                     )
                 }
