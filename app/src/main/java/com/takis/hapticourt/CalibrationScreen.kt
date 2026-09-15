@@ -1,11 +1,8 @@
 package com.takis.hapticourt
 
-// #IMPORTS_SPRINT_3
 import android.Manifest
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Matrix
-import android.speech.tts.TextToSpeech
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -15,98 +12,53 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
-import java.util.Locale
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.Font
 
-// #TTS_VIEW_MODEL
-class CalibrationViewModel : ViewModel(), TextToSpeech.OnInitListener {
-    // ... [Kode TTS tetap sama]
-    private var tts: TextToSpeech? = null
-    var isTtsReady by mutableStateOf(false)
-        private set
-        
-    private var lastSpokenText: String = ""
-    private var lastSpokenTime: Long = 0
-    
+// #VIEW_MODEL_CLEANED
+class CalibrationViewModel : ViewModel() {
     // State UI Kalibrasi Lapangan
     var isCalibrationDone by mutableStateOf(false)
         private set
         
-    var calibrationStatus by mutableStateOf("Tahan HP dengan stabil, arahkan ke seluruh lapangan, lalu tekan Calibrate.")
+    var calibrationStatus by mutableStateOf("Ready to Calibrate")
         private set
 
     fun updateCalibrationStatus(status: String, done: Boolean = false) {
         calibrationStatus = status
         isCalibrationDone = done
     }
-
-    fun initTts(context: Context) {
-        if (tts == null) {
-            tts = TextToSpeech(context.applicationContext, this)
-        }
-    }
-
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            val result = tts?.setLanguage(Locale("id", "ID"))
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                tts?.setLanguage(Locale.US)
-            }
-            isTtsReady = true
-        }
-    }
-
-    fun speakInstruction(text: String) {
-        if (!isTtsReady) return
-        val currentTime = System.currentTimeMillis()
-        if (text == lastSpokenText && (currentTime - lastSpokenTime) < 2000) {
-            return
-        }
-        tts?.speak(text, TextToSpeech.QUEUE_ADD, null, null)
-        lastSpokenText = text
-        lastSpokenTime = currentTime
-    }
-
-    override fun onCleared() {
-        tts?.stop()
-        tts?.shutdown()
-        tts = null
-        super.onCleared()
-    }
 }
 
-// #SCREEN_CALIBRATION_UPDATED
 val SamsungFont = FontFamily(
     Font(R.font.samsung_one_400, FontWeight.Normal),
     Font(R.font.samsung_one_700, FontWeight.Bold),
@@ -125,7 +77,6 @@ fun CalibrationScreen(navController: NavController, calibrationViewModel: Calibr
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
 
     LaunchedEffect(Unit) {
-        calibrationViewModel.initTts(context)
         if (!cameraPermissionState.status.isGranted) {
             cameraPermissionState.launchPermissionRequest()
         }
@@ -227,7 +178,7 @@ fun CalibrationScreen(navController: NavController, calibrationViewModel: Calibr
                 Button(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        calibrationViewModel.speakInstruction("Menganalisa lapangan.")
+                        calibrationViewModel.updateCalibrationStatus("Menganalisis...", false)
                         
                         imageCapture?.takePicture(
                             ContextCompat.getMainExecutor(context),
@@ -247,15 +198,14 @@ fun CalibrationScreen(navController: NavController, calibrationViewModel: Calibr
                                         val success = courtDetector.calibrateCourt(rotatedBitmap)
                                         if (success) {
                                             calibrationViewModel.updateCalibrationStatus("Berhasil!", true)
-                                            calibrationViewModel.speakInstruction("Kalibrasi sukses. Tekan Start.")
                                         } else {
-                                            calibrationViewModel.speakInstruction("Gagal. Harap ulangi.")
+                                            calibrationViewModel.updateCalibrationStatus("Gagal.", false)
                                         }
                                     }
                                 }
 
                                 override fun onError(exception: ImageCaptureException) {
-                                    calibrationViewModel.speakInstruction("Gagal Kamera.")
+                                    calibrationViewModel.updateCalibrationStatus("Gagal Kamera.", false)
                                 }
                             }
                         )
@@ -264,14 +214,14 @@ fun CalibrationScreen(navController: NavController, calibrationViewModel: Calibr
                     shape = RoundedCornerShape(32.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f) // Menghabiskan 50% ruang kotak bawah
-                        .semantics { role = Role.Button; contentDescription = "Tombol Kalibrasi Lapangan" }
+                        .weight(1f)
+                        .semantics { role = Role.Button; contentDescription = "Tombol Kalibrasi Lapangan. Status saat ini: ${calibrationViewModel.calibrationStatus}" }
                 ) {
                     Text(
-                        text = "Calibrate", 
+                        text = if (calibrationViewModel.calibrationStatus != "Ready to Calibrate") calibrationViewModel.calibrationStatus else "Calibrate", 
                         fontFamily = SamsungFont, 
                         color = Color.White, 
-                        fontSize = 32.sp, 
+                        fontSize = 28.sp, 
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -280,7 +230,6 @@ fun CalibrationScreen(navController: NavController, calibrationViewModel: Calibr
                 Button(
                     onClick = { 
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        calibrationViewModel.speakInstruction("Memulai pelacakan.")
                         navController.navigate(Screen.LiveTracking.route) 
                     },
                     enabled = calibrationViewModel.isCalibrationDone,
@@ -291,10 +240,10 @@ fun CalibrationScreen(navController: NavController, calibrationViewModel: Calibr
                     shape = RoundedCornerShape(32.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f) // Menghabiskan 50% ruang kotak bawah
+                        .weight(1f)
                         .semantics { role = Role.Button; contentDescription = "Tombol Mulai Pelacakan" }
                 ) {
-                    Text("Start", fontFamily = SamsungFont, color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Start", fontFamily = SamsungFont, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
                 }
             }
         }

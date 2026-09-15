@@ -157,32 +157,68 @@ class AiProcessor(context: Context) {
         yoloInputBuffer.asFloatBuffer().put(floatArray)
         yoloInputBuffer.rewind()
 
-        // Model kustom best_int8.tflite memiliki 1 Kelas (Bola Tenis) + 4 BBox = 5 matrix
-        // Karena input 640x640, output tensornya menghasilkan 8400 bounding boxes
-        val outputBuffer = Array(1) { Array(5) { FloatArray(8400) } }
+        // Model kustom V11 memiliki 3 Kelas (Bola, Pemain, Official) + 4 BBox = 7 matrix
+        val outputBuffer = Array(1) { Array(7) { FloatArray(8400) } }
         yoloInterpreter?.run(yoloInputBuffer, outputBuffer)
 
-        // List untuk menampung semua objek yang terdeteksi
-        // Gunakan list berisi Pair(Confidence, Coordinate) untuk melakukan sorting
+        val playerCandidates = mutableListOf<Pair<Float, Pair<Int, Int>>>()
         val ballCandidates = mutableListOf<Pair<Float, Pair<Int, Int>>>()
 
-        var maxBallConf = 0f
-        
         for (i in 0 until 8400) {
-            // Karena hanya ada 1 kelas di model ini (Bola), index kelasnya adalah 4 (0,1,2,3 adalah BBox)
+            // Indeks Kelas 0: Bola Tenis (Offset 4)
             val ballConf = outputBuffer[0][4][i] 
-            
-            if (ballConf > maxBallConf) maxBallConf = ballConf
             if (ballConf > 0.15f) {
                 ballCandidates.add(Pair(ballConf, getCoordinatesFromIndex(i)))
             }
+
+            // Indeks Kelas 1: Players (Offset 5)
+            val playerConf = outputBuffer[0][5][i]
+            if (playerConf > 0.35f) {
+                playerCandidates.add(Pair(playerConf, getCoordinatesFromIndex(i)))
+            }
+            
+            // Indeks Kelas 2: Official (Offset 6) -> DIABAIKAN
         }
 
-        // Batasi maksimum 1 bola (karena hanya ada 1 bola dalam permainan tenis)
-        val ballList = ballCandidates
-            .sortedByDescending { it.first }
-            .take(1) // Ambil 1 bola terbaik
-            .map { it.second }
+        // Urutkan berdasarkan skor tertinggi
+        playerCandidates.sortByDescending { it.first }
+        ballCandidates.sortByDescending { it.first }
+
+        // Mencegah Tumpang Tindih (Simple NMS Jarak)
+        val filteredPlayers = mutableListOf<Pair<Int, Int>>()
+        for (candidate in playerCandidates) {
+            val coords = candidate.second
+            var isTooClose = false
+            
+            for (saved in filteredPlayers) {
+                // Hitung jarak (Euclidean distance sederhana)
+                val dx = coords.first - saved.first
+                val dy = coords.second - saved.second
+                val distSq = dx * dx + dy * dy
+                
+                // Jika titik baru berada dalam radius ~50 piksel dari titik yang sudah ada, abaikan
+                if (distSq < 2500) { 
+                    isTooClose = true
+                    break
+                }
+            }
+            
+            if (!isTooClose) {
+                filteredPlayers.add(coords)
+            }
+            
+            // Batasi maksimum 2 pemain (Kita dan Musuh)
+            if (filteredPlayers.size >= 2) break
+        }
+
+        // Ambil bola terbaik saja
+        val ballList = ballCandidates.take(1).map { it.second }
+
+        val playerStr = if (filteredPlayers.isNotEmpty()) {
+            filteredPlayers.joinToString(";") { "${it.first},${it.second}" }
+        } else {
+            "N,N"
+        }
 
         val ballStr = if (ballList.isNotEmpty()) {
             ballList.joinToString(";") { "${it.first},${it.second}" }
@@ -190,9 +226,7 @@ class AiProcessor(context: Context) {
             "N,N"
         }
 
-        // Karena model ini TIDAK BISA mendeteksi pemain, kita kirimkan "N,N" untuk pemain.
-        // Jika kamu ingin mendeteksi keduanya, kamu harus men-training ulang model YOLO-mu dengan 2 kelas (Bola dan Pemain).
-        return "B:$ballStr|P:N,N"
+        return "B:$ballStr|P:$playerStr"
     }
 
     fun close() {

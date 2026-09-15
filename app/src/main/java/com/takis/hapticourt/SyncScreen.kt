@@ -17,22 +17,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import kotlinx.coroutines.delay
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 
 @Composable
 fun SyncScreen(navController: NavController, wifiViewModel: WifiViewModel = viewModel()) {
-    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    val calibrationViewModel: CalibrationViewModel = viewModel()
-    
-    LaunchedEffect(Unit) {
-        calibrationViewModel.initTts(context)
-        delay(500)
-        calibrationViewModel.speakInstruction("HaptiCourt. Tekan tombol Connect di bawah.")
-    }
 
     Column(
         modifier = Modifier
@@ -49,13 +41,22 @@ fun SyncScreen(navController: NavController, wifiViewModel: WifiViewModel = view
                 .padding(start = 32.dp),
             verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = "HaptiCourt",
-                fontFamily = SamsungFont,
-                color = Color.Gray,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Normal
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(id = R.drawable.logo_hapticourt),
+                    contentDescription = "Logo HaptiCourt",
+                    modifier = Modifier
+                        .size(48.dp) // Ukuran logo dikecilkan sedikit agar seimbang dengan teks
+                        .padding(end = 12.dp) // Jarak antara logo dan teks
+                )
+                Text(
+                    text = "HaptiCourt",
+                    fontFamily = SamsungFont,
+                    color = Color.Gray,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            }
             Text(
                 text = "Sync Vest",
                 fontFamily = SamsungFont,
@@ -85,22 +86,19 @@ fun SyncScreen(navController: NavController, wifiViewModel: WifiViewModel = view
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         if (!isConnected) {
-                            calibrationViewModel.speakInstruction("Menyambungkan rompi.")
                             wifiViewModel.startConnection {
-                                calibrationViewModel.speakInstruction("Berhasil. Membuka menu.")
                                 navController.navigate(Screen.SportMode.route)
                             }
                         } else {
-                            calibrationViewModel.speakInstruction("Membuka menu.")
                             navController.navigate(Screen.SportMode.route)
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isConnected) Color(0xFF00E676) else Color(0xFF007AFF)
                     ),
-                    shape = RoundedCornerShape(32.dp), // Radius yang lebih tegas tapi tetap melengkung
+                    shape = RoundedCornerShape(32.dp),
                     modifier = Modifier
-                        .fillMaxSize() // Memenuhi seluruh kotak Surface bawah
+                        .fillMaxSize()
                         .semantics { 
                             role = Role.Button
                             contentDescription = if (isConnected) "Rompi Tersambung. Lanjutkan" else "Tombol Hubungkan Rompi"
@@ -110,7 +108,7 @@ fun SyncScreen(navController: NavController, wifiViewModel: WifiViewModel = view
                         text = if (isConnected) "Connected" else "Connect", 
                         fontFamily = SamsungFont, 
                         color = Color.White, 
-                        fontSize = 40.sp, // Teks raksasa
+                        fontSize = 40.sp, 
                         fontWeight = FontWeight.Bold
                     )
                 }

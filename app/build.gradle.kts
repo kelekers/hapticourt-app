@@ -21,9 +21,12 @@ android {
 
     buildTypes {
         release {
-            optimization {
-                enable = false
-            }
+            isMinifyEnabled = true // Membuang kode Kotlin/Java dan library yang tidak dipakai
+            isShrinkResources = true // Membuang aset gambar/XML yang tidak terpakai
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
     compileOptions {
