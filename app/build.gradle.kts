@@ -72,6 +72,11 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-api:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-gpu-api:2.16.1")
+    
+    // TFLite Support Library (Untuk pemrosesan gambar C++ native yang sangat cepat)
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4") {
+        exclude(group = "org.tensorflow", module = "tensorflow-lite-support-api")
+    }
 
     // #DEPENDENCIES_OPENCV (Homography Transformation)
     implementation("org.opencv:opencv:4.9.0")

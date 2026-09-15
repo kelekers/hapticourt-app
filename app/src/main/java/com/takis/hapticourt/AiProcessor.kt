@@ -24,10 +24,10 @@ class AiProcessor(context: Context) {
     // Mencegah tabrakan frame
     private val isProcessing = AtomicBoolean(false)
 
-    // Alokasi buffer YOLO 416x416 untuk Tipe FLOAT32
+    // Alokasi buffer YOLO 640x640 untuk Tipe FLOAT32
     // Karena kita tidak yakin apakah model ini Float32 atau INT8 di bagian Input/Outputnya,
     // kita gunakan buffer ByteBuffer ini (Float)
-    private val yoloInputBuffer = ByteBuffer.allocateDirect(1 * 416 * 416 * 3 * 4).apply {
+    private val yoloInputBuffer = ByteBuffer.allocateDirect(1 * 640 * 640 * 3 * 4).apply {
         order(ByteOrder.nativeOrder())
     }
 
@@ -45,8 +45,8 @@ class AiProcessor(context: Context) {
                 Log.d(TAG, "GPU tidak didukung, menggunakan 4 Threads CPU.")
             }
 
-            // Load model YOLO26 Nano murni
-            yoloInterpreter = Interpreter(loadModelFile(context, "yolo26n.tflite"), options)
+            // Load model kustom yang sudah dilatih khusus bola tenis dan pemain (INT8)
+            yoloInterpreter = Interpreter(loadModelFile(context, "best_int8.tflite"), options)
             
             // Cek Tipe Data Input dan Output secara rinci
             val inputTensor = yoloInterpreter!!.getInputTensor(0)
@@ -107,107 +107,82 @@ class AiProcessor(context: Context) {
 
     // Fungsi untuk mengubah Index YOLO menjadi koordinat Layar (X,Y)
     private fun getCoordinatesFromIndex(index: Int): Pair<Int, Int> {
-        // YOLO 416x416 memiliki 3 tingkatan Grid (Feature Maps):
-        // 1. Grid 52x52 (2704 kotak) untuk objek KECIL -> Index 0 s/d 2703
-        // 2. Grid 26x26 (676 kotak) untuk objek SEDANG -> Index 2704 s/d 3379
-        // 3. Grid 13x13 (169 kotak) untuk objek BESAR -> Index 3380 s/d 3548
+        // YOLO 640x640 memiliki 3 tingkatan Grid (Feature Maps):
+        // 1. Grid 80x80 (6400 kotak) -> Index 0 s/d 6399 (Untuk Objek Kecil, Kotak ukuran 8x8)
+        // 2. Grid 40x40 (1600 kotak) -> Index 6400 s/d 7999 (Untuk Objek Sedang, Kotak ukuran 16x16)
+        // 3. Grid 20x20 (400 kotak) -> Index 8000 s/d 8399 (Untuk Objek Besar, Kotak ukuran 32x32)
         
         return when {
-            index < 2704 -> { // Grid 52x52 (Ukuran per sel: 416/52 = 8 pixel)
-                val gridX = index % 52
-                val gridY = index / 52
+            index < 6400 -> { // Grid 80x80 (Ukuran per sel: 640/80 = 8 pixel)
+                val gridX = index % 80
+                val gridY = index / 80
                 Pair(gridX * 8 + 4, gridY * 8 + 4) // +4 untuk titik tengah sel
             }
-            index < 3380 -> { // Grid 26x26 (Ukuran per sel: 416/26 = 16 pixel)
-                val relIndex = index - 2704
-                val gridX = relIndex % 26
-                val gridY = relIndex / 26
+            index < 8000 -> { // Grid 40x40 (Ukuran per sel: 640/40 = 16 pixel)
+                val relIndex = index - 6400
+                val gridX = relIndex % 40
+                val gridY = relIndex / 40
                 Pair(gridX * 16 + 8, gridY * 16 + 8) // +8 untuk titik tengah
             }
-            else -> { // Grid 13x13 (Ukuran per sel: 416/13 = 32 pixel)
-                val relIndex = index - 3380
-                val gridX = relIndex % 13
-                val gridY = relIndex / 13
+            else -> { // Grid 20x20 (Ukuran per sel: 640/20 = 32 pixel)
+                val relIndex = index - 8000
+                val gridX = relIndex % 20
+                val gridY = relIndex / 20
                 Pair(gridX * 32 + 16, gridY * 32 + 16) // +16 untuk titik tengah
             }
         }
     }
 
     private fun runYoloInference(bitmap: Bitmap): String {
-        // Skala gambar input menjadi 416x416
-        val resizedBitmap = Bitmap.createScaledBitmap(bitmap, 416, 416, true)
+        // Skala gambar input menjadi 640x640
+        val resizedBitmap = Bitmap.createScaledBitmap(bitmap, 640, 640, true)
         
-        // Kosongkan buffer YOLO
+        val intValues = IntArray(640 * 640)
+        resizedBitmap.getPixels(intValues, 0, 640, 0, 0, 640, 640)
+        
+        yoloInputBuffer.rewind()
+        
+        val floatArray = FloatArray(640 * 640 * 3)
+
+        var rIdx = 0
+        var gIdx = 640 * 640
+        var bIdx = 640 * 640 * 2
+        
+        for (pixel in intValues) {
+            floatArray[rIdx++] = ((pixel shr 16) and 0xFF) / 255.0f
+            floatArray[gIdx++] = ((pixel shr 8) and 0xFF) / 255.0f
+            floatArray[bIdx++] = (pixel and 0xFF) / 255.0f
+        }
+        
+        yoloInputBuffer.asFloatBuffer().put(floatArray)
         yoloInputBuffer.rewind()
 
-        val intValues = IntArray(416 * 416)
-        resizedBitmap.getPixels(intValues, 0, 416, 0, 0, 416, 416)
-        
-        // Ultralytics TFLite Export default (int8=True) umumnya tetap meminta Input berformat Float32 [0.0 - 1.0]
-        // Mereka menyematkan layer "Quantize" di dalam modelnya.
-        // TETAPI orientasi gambarnya harus RGB (CameraX memberikan ARGB/RGBA).
-        // Mari pastikan urutannya R-G-B
-        // Format Input YOLO PyTorch: CHW (Channel, Height, Width) [0.0 - 1.0]
-        // KITA HARUS MENGISI: SEMUA RED, lalu SEMUA GREEN, lalu SEMUA BLUE.
-        
-        // 1. Ekstrak Red
-        for (i in 0 until intValues.size) {
-            val r = (intValues[i] shr 16 and 0xFF) / 255.0f
-            yoloInputBuffer.putFloat(r)
-        }
-        
-        // 2. Ekstrak Green
-        for (i in 0 until intValues.size) {
-            val g = (intValues[i] shr 8 and 0xFF) / 255.0f
-            yoloInputBuffer.putFloat(g)
-        }
-        
-        // 3. Ekstrak Blue
-        for (i in 0 until intValues.size) {
-            val b = (intValues[i] and 0xFF) / 255.0f
-            yoloInputBuffer.putFloat(b)
-        }
-        
-        // Kembalikan ke awal untuk pembacaan TFLite
-        yoloInputBuffer.rewind()
-
-        // YOLOv8/11/26 standard COCO memiliki 80 class + 4 koordinat = 84 matrix
-        // Karena input 416x416, output tensornya menghasilkan 3549 bounding boxes
-        val outputBuffer = Array(1) { Array(84) { FloatArray(3549) } }
+        // Model kustom best_int8.tflite memiliki 1 Kelas (Bola Tenis) + 4 BBox = 5 matrix
+        // Karena input 640x640, output tensornya menghasilkan 8400 bounding boxes
+        val outputBuffer = Array(1) { Array(5) { FloatArray(8400) } }
         yoloInterpreter?.run(yoloInputBuffer, outputBuffer)
 
         // List untuk menampung semua objek yang terdeteksi
-        val playerList = mutableListOf<Pair<Int, Int>>()
-        val ballList = mutableListOf<Pair<Int, Int>>()
+        // Gunakan list berisi Pair(Confidence, Coordinate) untuk melakukan sorting
+        val ballCandidates = mutableListOf<Pair<Float, Pair<Int, Int>>>()
 
-        // Karena YOLO menghasilkan BANYAK BBox bertumpuk untuk 1 objek (karena tanpa NMS),
-        // kita akan menyimpan skor tertinggi (sebagai Argmax lokal)
-        var maxPlayerConf = 0f
         var maxBallConf = 0f
         
-        for (i in 0 until 3549) {
-            val playerConf = outputBuffer[0][4][i]
-            if (playerConf > maxPlayerConf) maxPlayerConf = playerConf
-            if (playerConf > 0.35f) { // Threshold pemain sedikit dinaikkan agar background tidak ikut
-                playerList.add(getCoordinatesFromIndex(i))
-            }
-
-            val ballConf = outputBuffer[0][36][i]
+        for (i in 0 until 8400) {
+            // Karena hanya ada 1 kelas di model ini (Bola), index kelasnya adalah 4 (0,1,2,3 adalah BBox)
+            val ballConf = outputBuffer[0][4][i] 
+            
             if (ballConf > maxBallConf) maxBallConf = ballConf
             if (ballConf > 0.15f) {
-                ballList.add(getCoordinatesFromIndex(i))
+                ballCandidates.add(Pair(ballConf, getCoordinatesFromIndex(i)))
             }
         }
 
-        // TAMPILKAN LOG HASIL MENTAH DARI TFLITE
-        // Log.d(TAG, "RAW SCORE -> Pemain: $maxPlayerConf | Bola: $maxBallConf")
-
-        // Memformat List menjadi String (P:x,y;x,y|B:x,y)
-        val playerStr = if (playerList.isNotEmpty()) {
-            playerList.joinToString(";") { "${it.first},${it.second}" }
-        } else {
-            "N,N"
-        }
+        // Batasi maksimum 1 bola (karena hanya ada 1 bola dalam permainan tenis)
+        val ballList = ballCandidates
+            .sortedByDescending { it.first }
+            .take(1) // Ambil 1 bola terbaik
+            .map { it.second }
 
         val ballStr = if (ballList.isNotEmpty()) {
             ballList.joinToString(";") { "${it.first},${it.second}" }
@@ -215,7 +190,9 @@ class AiProcessor(context: Context) {
             "N,N"
         }
 
-        return "B:$ballStr|P:$playerStr"
+        // Karena model ini TIDAK BISA mendeteksi pemain, kita kirimkan "N,N" untuk pemain.
+        // Jika kamu ingin mendeteksi keduanya, kamu harus men-training ulang model YOLO-mu dengan 2 kelas (Bola dan Pemain).
+        return "B:$ballStr|P:N,N"
     }
 
     fun close() {

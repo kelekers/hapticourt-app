@@ -38,6 +38,14 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.Font
 import org.opencv.core.Core
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Point
@@ -203,44 +211,39 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
 
                 try {
                     val parts = inferenceResult.split("|")
-                    // Menggambar Bola (Warna Biru)
+                    // Menggambar Bola (Warna Biru) - Mendukung banyak bola jika ada
                     val ballPart = parts.find { it.startsWith("B:") }?.substringAfter("B:")
                     if (ballPart != null && ballPart != "N,N") {
-                        val coords = ballPart.split(",")
-                        if (coords.size == 2) {
-                            // Resolusi sekarang mengikuti YOLO (416x416)
-                            val rx = coords[0].toFloat() / 416f
-                            val ry = coords[1].toFloat() / 416f
-                            
-                            // Gunakan titik pusat layar jika resolusi berantakan (clamp)
-                            val finalX = (rx * canvasW).coerceIn(0f, canvasW)
-                            val finalY = (ry * canvasH).coerceIn(0f, canvasH)
-                            
-                            drawCircle(
-                                color = Color.Blue,
-                                radius = 25f,
-                                center = Offset(finalX, finalY)
-                            )
+                        val ballList = ballPart.split(";") // Pisahkan titik koma dulu
+                        for (ballCoord in ballList) {
+                            val coords = ballCoord.split(",")
+                            if (coords.size == 2) {
+                                val rx = coords[0].toFloat() / 640f
+                                val ry = coords[1].toFloat() / 640f
+                                
+                                val finalX = (rx * canvasW).coerceIn(0f, canvasW)
+                                val finalY = (ry * canvasH).coerceIn(0f, canvasH)
+                                
+                                drawCircle(color = Color.Blue, radius = 25f, center = Offset(finalX, finalY))
+                            }
                         }
                     }
 
-                    // Menggambar Pemain (Warna Merah)
+                    // Menggambar Pemain (Warna Merah) - Mendukung banyak pemain
                     val playerPart = parts.find { it.startsWith("P:") }?.substringAfter("P:")
                     if (playerPart != null && playerPart != "N,N") {
-                        val coords = playerPart.split(",")
-                        if (coords.size == 2) {
-                            // Resolusi input YOLO adalah 416x416
-                            val rx = coords[0].toFloat() / 416f
-                            val ry = coords[1].toFloat() / 416f
-                            
-                            val finalX = (rx * canvasW).coerceIn(0f, canvasW)
-                            val finalY = (ry * canvasH).coerceIn(0f, canvasH)
-                            
-                            drawCircle(
-                                color = Color.Red,
-                                radius = 35f,
-                                center = Offset(finalX, finalY)
-                            )
+                        val playerList = playerPart.split(";") // Pisahkan tiap pemain
+                        for (playerCoord in playerList) {
+                            val coords = playerCoord.split(",")
+                            if (coords.size == 2) {
+                                val rx = coords[0].toFloat() / 640f
+                                val ry = coords[1].toFloat() / 640f
+                                
+                                val finalX = (rx * canvasW).coerceIn(0f, canvasW)
+                                val finalY = (ry * canvasH).coerceIn(0f, canvasH)
+                                
+                                drawCircle(color = Color.Red, radius = 35f, center = Offset(finalX, finalY))
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -252,32 +255,40 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(top = 40.dp, start = 16.dp, end = 16.dp), // Beri jarak lebih atas untuk status bar
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                // FPS Counter
-                Text(
-                    text = "FPS: $fps",
-                    color = Color.Yellow,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.background(Color.Black.copy(alpha = 0.5f)).padding(8.dp)
-                )
+                // FPS Counter (Bentuk Pill ala Samsung)
+                Surface(
+                    color = Color(0xFF151515).copy(alpha = 0.85f),
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Text(
+                        text = "FPS: $fps",
+                        fontFamily = SamsungFont,
+                        color = Color(0xFFFFD600), // Kuning cerah untuk kontras tinggi
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
                 
-                // Peta Mini (Court Minimap)
-                Box(
-                    modifier = Modifier
-                        .size(120.dp, 240.dp) // Rasio 1:2 (misal untuk merepresentasikan 600x1200)
-                        .background(Color(0xFF2E7D32)) // Warna Hijau Lapangan
+                // Peta Mini (Court Minimap) (Rounded Rectangle ala Samsung)
+                Surface(
+                    shape = RoundedCornerShape(24.dp), // Radius lebih halus
+                    color = Color(0xFF2E7D32).copy(alpha = 0.85f),
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.size(120.dp, 240.dp)
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         // Gambar garis tengah lapangan
                         drawLine(
-                            color = Color.White,
+                            color = Color.White.copy(alpha = 0.7f),
                             start = Offset(0f, size.height / 2),
                             end = Offset(size.width, size.height / 2),
-                            strokeWidth = 2f
+                            strokeWidth = 3f
                         )
                         
                         // Gambar Pemain (Merah) - Bisa Banyak
@@ -289,7 +300,7 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
                                 val clampX = mapX.coerceIn(0f, size.width)
                                 val clampY = mapY.coerceIn(0f, size.height)
                                 
-                                drawCircle(color = Color.Red, radius = 10f, center = Offset(clampX, clampY))
+                                drawCircle(color = Color(0xFFFF3B30), radius = 12f, center = Offset(clampX, clampY))
                             }
                         }
                         
@@ -302,47 +313,52 @@ fun LiveTrackingScreen(navController: NavController, wifiViewModel: WifiViewMode
                                 val clampX = mapX.coerceIn(0f, size.width)
                                 val clampY = mapY.coerceIn(0f, size.height)
                                 
-                                drawCircle(color = Color.Blue, radius = 6f, center = Offset(clampX, clampY))
+                                drawCircle(color = Color(0xFF007AFF), radius = 8f, center = Offset(clampX, clampY))
                             }
                         }
                     }
                 }
             }
-
-            Text(
-                text = "LIVE TRACKING",
-                color = Color.White,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(16.dp)
-                    .semantics { contentDescription = "Layar Pelacakan Langsung" }
-            )
-
-            Text(
-                text = inferenceResult,
-                color = Color.Green,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp)
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .semantics { contentDescription = "Hasil AI: $inferenceResult" }
-            )
         }
 
-        Button(
-            onClick = { navController.popBackStack("sync", inclusive = false) },
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp)
-                .height(80.dp)
-                .semantics { contentDescription = "Tombol Hentikan Pelacakan" }
+        // --- INTERACTION AREA (Panel Bawah ala One UI) ---
+        val haptic = LocalHapticFeedback.current
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = Color(0xFF151515), // Dark Theme Panel Samsung
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+            shadowElevation = 16.dp
         ) {
-            Text("Stop Tracking", color = Color.White, fontSize = 24.sp)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Teks status tak kasat mata untuk TalkBack (opsional) atau teks kecil
+                Text(
+                    text = "Tracking Active",
+                    fontFamily = SamsungFont,
+                    color = Color.Gray,
+                    fontSize = 16.sp,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                Button(
+                    onClick = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        navController.popBackStack("sync", inclusive = false) 
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3B30)), // Merah terang
+                    shape = RoundedCornerShape(50), // Pill Shape
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(88.dp) // Ukuran raksasa untuk tunanetra
+                        .semantics { role = Role.Button; contentDescription = "Tombol Berhenti Melacak dan Kembali" }
+                ) {
+                    Text("Stop Tracking", fontFamily = SamsungFont, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold)
+                }
+            }
         }
     }
 }

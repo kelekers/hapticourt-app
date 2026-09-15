@@ -39,6 +39,15 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.Font
 
 // #TTS_VIEW_MODEL
 class CalibrationViewModel : ViewModel(), TextToSpeech.OnInitListener {
@@ -98,6 +107,12 @@ class CalibrationViewModel : ViewModel(), TextToSpeech.OnInitListener {
 }
 
 // #SCREEN_CALIBRATION_UPDATED
+val SamsungFont = FontFamily(
+    Font(R.font.samsung_one_400, FontWeight.Normal),
+    Font(R.font.samsung_one_700, FontWeight.Bold),
+    Font(R.font.samsung_sharp_sans_bold, FontWeight.ExtraBold)
+)
+
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun CalibrationScreen(navController: NavController, calibrationViewModel: CalibrationViewModel = viewModel()) {
@@ -107,7 +122,6 @@ fun CalibrationScreen(navController: NavController, calibrationViewModel: Calibr
     val courtDetector = remember { CourtDetector(context) }
     val coroutineScope = remember { CoroutineScope(Dispatchers.Main) }
     
-    // Simpan referensi ImageCapture untuk mengambil foto lapangan
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
 
     LaunchedEffect(Unit) {
@@ -117,17 +131,31 @@ fun CalibrationScreen(navController: NavController, calibrationViewModel: Calibr
         }
     }
 
+    // Samsung One UI Background
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(Color.Black)
     ) {
+        // --- VIEWING AREA ---
+        Text(
+            text = "Calibration",
+            fontFamily = SamsungFont,
+            color = Color.White,
+            fontSize = 42.sp,
+            fontWeight = FontWeight.ExtraBold,
+            modifier = Modifier
+                .padding(start = 24.dp, top = 64.dp, bottom = 16.dp)
+                .semantics { contentDescription = "Layar Kalibrasi Kamera" }
+        )
+
         if (cameraPermissionState.status.isGranted) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
+                    .weight(1.5f)
+                    .padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(32.dp))
             ) {
                 AndroidView(
                     factory = { ctx ->
@@ -164,93 +192,128 @@ fun CalibrationScreen(navController: NavController, calibrationViewModel: Calibr
                     },
                     modifier = Modifier.fillMaxSize()
                 )
-
-                Text(
-                    text = "CALIBRATION",
-                    color = Color.White,
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(16.dp)
-                        .background(Color.Black.copy(alpha = 0.5f))
-                )
             }
         } else {
-            Box(modifier = Modifier.fillMaxWidth().weight(1f).background(Color.DarkGray), contentAlignment = Alignment.Center) {
-                Text("Membutuhkan izin kamera", color = Color.White)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1.5f)
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(Color(0xFF151515)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Membutuhkan izin kamera", fontFamily = SamsungFont, color = Color.Gray, fontSize = 18.sp)
             }
         }
 
-        // Area Status & Tombol
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // --- INTERACTION AREA ---
+        val haptic = LocalHapticFeedback.current
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = Color(0xFF151515),
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
         ) {
-            Text(
-                text = calibrationViewModel.calibrationStatus,
-                color = if (calibrationViewModel.isCalibrationDone) Color.Green else Color.White,
-                fontSize = 16.sp,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Teks Status
+                Text(
+                    text = calibrationViewModel.calibrationStatus,
+                    fontFamily = SamsungFont,
+                    color = if (calibrationViewModel.isCalibrationDone) Color(0xFF00E676) else Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 28.sp,
+                    modifier = Modifier
+                        .padding(bottom = 16.dp)
+                        .semantics { contentDescription = "Status: ${calibrationViewModel.calibrationStatus}" }
+                )
 
-            Button(
-                onClick = {
-                    calibrationViewModel.updateCalibrationStatus("Memotret dan menganalisa lapangan...")
-                    
-                    imageCapture?.takePicture(
-                        ContextCompat.getMainExecutor(context),
-                        object : ImageCapture.OnImageCapturedCallback() {
-                            override fun onCaptureSuccess(image: ImageProxy) {
-                                val rotation = image.imageInfo.rotationDegrees
-                                val bitmap = image.toBitmap()
-                                image.close() // Segera tutup frame
+                // Tombol Kalibrasi
+                Button(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        calibrationViewModel.updateCalibrationStatus("Menganalisa...", false)
+                        calibrationViewModel.speakInstruction("Menganalisa lapangan.")
+                        
+                        imageCapture?.takePicture(
+                            ContextCompat.getMainExecutor(context),
+                            object : ImageCapture.OnImageCapturedCallback() {
+                                override fun onCaptureSuccess(image: ImageProxy) {
+                                    val rotation = image.imageInfo.rotationDegrees
+                                    val bitmap = image.toBitmap()
+                                    image.close()
 
-                                // Putar agar tegak
-                                val matrix = Matrix()
-                                matrix.postRotate(rotation.toFloat())
-                                val rotatedBitmap = Bitmap.createBitmap(
-                                    bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
-                                )
+                                    val matrix = Matrix()
+                                    matrix.postRotate(rotation.toFloat())
+                                    val rotatedBitmap = Bitmap.createBitmap(
+                                        bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
+                                    )
 
-                                // Lempar ke AI Court Detector
-                                coroutineScope.launch {
-                                    val success = courtDetector.calibrateCourt(rotatedBitmap)
-                                    if (success) {
-                                        calibrationViewModel.updateCalibrationStatus("Kalibrasi Berhasil! Matriks 2D disimpan.", true)
-                                        calibrationViewModel.speakInstruction("Kalibrasi lapangan berhasil. Anda bisa melanjutkan.")
-                                    } else {
-                                        calibrationViewModel.updateCalibrationStatus("Gagal menemukan sudut lapangan. Coba geser sedikit.", false)
-                                        calibrationViewModel.speakInstruction("Gagal mendeteksi sudut. Harap ulangi.")
+                                    coroutineScope.launch {
+                                        val success = courtDetector.calibrateCourt(rotatedBitmap)
+                                        if (success) {
+                                            calibrationViewModel.updateCalibrationStatus("Berhasil!", true)
+                                            calibrationViewModel.speakInstruction("Kalibrasi sukses. Tekan Start.")
+                                        } else {
+                                            calibrationViewModel.updateCalibrationStatus("Gagal.", false)
+                                            calibrationViewModel.speakInstruction("Gagal. Harap ulangi.")
+                                        }
                                     }
                                 }
-                            }
 
-                            override fun onError(exception: ImageCaptureException) {
-                                calibrationViewModel.updateCalibrationStatus("Gagal mengambil gambar kamera.", false)
+                                override fun onError(exception: ImageCaptureException) {
+                                    calibrationViewModel.updateCalibrationStatus("Gagal Kamera.", false)
+                                }
                             }
-                        }
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2A2A2A)),
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                        .semantics { role = Role.Button; contentDescription = "Tombol Kalibrasi Lapangan" }
+                ) {
+                    Text(
+                        text = "Calibrate", 
+                        fontFamily = SamsungFont, 
+                        color = Color.White, 
+                        fontSize = 20.sp, 
+                        fontWeight = FontWeight.Bold
                     )
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                modifier = Modifier.fillMaxWidth().height(64.dp)
-            ) {
-                Text("Calibrate Court", color = Color.White, fontSize = 20.sp)
-            }
+                }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Button(
-                onClick = { navController.navigate(Screen.LiveTracking.route) },
-                enabled = calibrationViewModel.isCalibrationDone,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (calibrationViewModel.isCalibrationDone) Color.Blue else Color.Gray
-                ),
-                modifier = Modifier.fillMaxWidth().height(80.dp)
-            ) {
-                Text("Start Tracking", color = Color.White, fontSize = 24.sp)
+                // Tombol Mulai Tracking
+                Button(
+                    onClick = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        calibrationViewModel.speakInstruction("Memulai pelacakan.")
+                        navController.navigate(Screen.LiveTracking.route) 
+                    },
+                    enabled = calibrationViewModel.isCalibrationDone,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (calibrationViewModel.isCalibrationDone) Color(0xFF007AFF) else Color(0xFF333333),
+                        disabledContainerColor = Color(0xFF333333)
+                    ),
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                        .semantics { role = Role.Button; contentDescription = "Tombol Mulai Pelacakan" }
+                ) {
+                    Text("Start", fontFamily = SamsungFont, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                }
             }
         }
     }
